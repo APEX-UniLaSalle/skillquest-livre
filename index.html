@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillQuest — La quête des compétences · Édition 2026-2027</title>
+<script src="https://unpkg.com/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+<style>
+  :root { --navy:#322838; --parchemin:#F4EDDC; --or:#DFA35C; --rouge:#B05548; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--navy); font-family:Georgia,'Times New Roman',serif; color:var(--parchemin);
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+  header { padding:14px 16px 6px; text-align:center; }
+  header h1 { font-size:1.05rem; letter-spacing:.14em; font-weight:normal; text-transform:uppercase; }
+  header h1 b { color:var(--rouge); font-weight:normal; }
+  header p { font-size:.72rem; color:var(--or); letter-spacing:.2em; text-transform:uppercase; margin-top:3px; }
+  #book-wrap { flex:1; width:100%; display:flex; justify-content:center; align-items:center; padding:10px 8px; }
+  #book { box-shadow:0 18px 60px rgba(0,0,0,.55); }
+  .page img { width:100%; height:100%; object-fit:cover; display:block; }
+  nav { display:flex; gap:10px; align-items:center; padding:10px 0 16px; flex-wrap:wrap; justify-content:center; }
+  nav button, nav a { background:transparent; border:1px solid var(--or); color:var(--parchemin);
+    font:inherit; font-size:.8rem; padding:6px 14px; border-radius:5px; cursor:pointer; text-decoration:none; }
+  nav button:hover, nav a:hover { background:rgba(223,163,92,.18); }
+  #pagenum { font-size:.8rem; color:var(--or); min-width:88px; text-align:center; }
+  @media (max-width:700px){ header h1{font-size:.85rem} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Skill<b>Quest</b> — La quête des compétences</h1>
+  <p>Édition 2026-2027 · APEX — UniLaSalle</p>
+</header>
+<div id="book-wrap"><div id="book"></div></div>
+<nav>
+  <button id="prev">◀ Précédent</button>
+  <span id="pagenum">…</span>
+  <button id="next">Suivant ▶</button>
+  <button id="fs">Plein écran</button>
+  <a href="SkillQuest-2026-27.pdf" download>Télécharger le PDF</a>
+</nav>
+<script>
+const N = 82, ratio = 210/297;
+const pages = Array.from({length:N}, (_,i)=>`page-${String(i+1).padStart(2,'0')}.jpg`);
+function dims(){
+  const availH = Math.max(320, window.innerHeight - 150);
+  const availW = Math.max(300, window.innerWidth - 24);
+  let h = availH, w = h*ratio;
+  if (2*w > availW){ w = Math.min(availW/2, availW); h = w/ratio; }
+  if (availW < 640){ w = Math.min(availW, availH*ratio); h = w/ratio; } // mobile : simple page
+  return {w:Math.floor(w), h:Math.floor(h)};
+}
+const d = dims();
+const flip = new St.PageFlip(document.getElementById('book'), {
+  width:d.w, height:d.h, size:'fixed', showCover:true, maxShadowOpacity:.4,
+  usePortrait:true, mobileScrollSupport:false, flippingTime:650
+});
+flip.loadFromImages(pages);
+const label = ()=>{ const p = flip.getCurrentPageIndex()+1;
+  document.getElementById('pagenum').textContent = `${p} / ${N}`; };
+flip.on('flip', label); setTimeout(label, 300);
+document.getElementById('prev').onclick = ()=>flip.flipPrev();
+document.getElementById('next').onclick = ()=>flip.flipNext();
+document.getElementById('fs').onclick = ()=>{
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); };
+document.addEventListener('keydown', e=>{
+  if (e.key==='ArrowRight'||e.key==='PageDown') flip.flipNext();
+  if (e.key==='ArrowLeft'||e.key==='PageUp') flip.flipPrev();
+});
+</script>
+</body>
+</html>
