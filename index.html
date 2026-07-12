@@ -18,11 +18,21 @@
   #book { box-shadow:0 18px 60px rgba(0,0,0,.55); }
   .page img { width:100%; height:100%; object-fit:cover; display:block; }
   nav { display:flex; gap:10px; align-items:center; padding:10px 0 16px; flex-wrap:wrap; justify-content:center; }
-  nav button, nav a { background:transparent; border:1px solid var(--or); color:var(--parchemin);
+  nav button, nav a, #zv button { background:transparent; border:1px solid var(--or); color:var(--parchemin);
     font:inherit; font-size:.8rem; padding:6px 14px; border-radius:5px; cursor:pointer; text-decoration:none; }
-  nav button:hover, nav a:hover { background:rgba(223,163,92,.18); }
+  nav button:hover, nav a:hover, #zv button:hover { background:rgba(223,163,92,.18); }
   #pagenum { font-size:.8rem; color:var(--or); min-width:88px; text-align:center; }
-  @media (max-width:700px){ header h1{font-size:.85rem} }
+  /* ---- Zoom / lecture ---- */
+  #zv { position:fixed; inset:0; background:rgba(20,14,24,.96); display:none; z-index:50;
+        flex-direction:column; }
+  #zv.open { display:flex; }
+  #zv-bar { display:flex; gap:8px; align-items:center; justify-content:center; padding:10px; flex-wrap:wrap; }
+  #zv-num { font-size:.8rem; color:var(--or); min-width:70px; text-align:center; }
+  #zv-view { flex:1; overflow:hidden; position:relative; cursor:grab; }
+  #zv-view.dragging { cursor:grabbing; }
+  #zv-img { position:absolute; top:0; left:0; transform-origin:0 0; user-select:none; -webkit-user-drag:none;
+            box-shadow:0 8px 40px rgba(0,0,0,.6); }
+  #zv-hint { text-align:center; font-size:.68rem; color:var(--or); opacity:.7; padding:6px; }
 </style>
 </head>
 <body>
@@ -35,18 +45,35 @@
   <button id="prev">◀ Précédent</button>
   <span id="pagenum">…</span>
   <button id="next">Suivant ▶</button>
+  <button id="zoom">🔍 Zoom lecture</button>
   <button id="fs">Plein écran</button>
   <a href="SkillQuest-2026-27.pdf" download>Télécharger le PDF</a>
 </nav>
+
+<div id="zv">
+  <div id="zv-bar">
+    <button id="zv-prev">◀</button>
+    <span id="zv-num">…</span>
+    <button id="zv-next">▶</button>
+    <button id="zv-minus">−</button>
+    <button id="zv-plus">+</button>
+    <button id="zv-fit">Ajuster</button>
+    <button id="zv-close">✕ Fermer</button>
+  </div>
+  <div id="zv-view"><img id="zv-img" alt="page"></div>
+  <div id="zv-hint">Molette ou boutons +/− pour zoomer · cliquer-glisser pour se déplacer · ←/→ pour changer de page · Échap pour fermer</div>
+</div>
+
 <script>
-const N = 82, ratio = 210/297;
-const pages = Array.from({length:N}, (_,i)=>`page-${String(i+1).padStart(2,'0')}.jpg`);
+const N = 82, ratio = 210/297, PREFIX = '';
+const src = i => `${PREFIX}page-${String(i+1).padStart(2,'0')}.jpg`; // i = index 0-based
+const pages = Array.from({length:N}, (_,i)=>src(i));
 function dims(){
   const availH = Math.max(320, window.innerHeight - 150);
   const availW = Math.max(300, window.innerWidth - 24);
   let h = availH, w = h*ratio;
   if (2*w > availW){ w = Math.min(availW/2, availW); h = w/ratio; }
-  if (availW < 640){ w = Math.min(availW, availH*ratio); h = w/ratio; } // mobile : simple page
+  if (availW < 640){ w = Math.min(availW, availH*ratio); h = w/ratio; }
   return {w:Math.floor(w), h:Math.floor(h)};
 }
 const d = dims();
@@ -55,14 +82,71 @@ const flip = new St.PageFlip(document.getElementById('book'), {
   usePortrait:true, mobileScrollSupport:false, flippingTime:650
 });
 flip.loadFromImages(pages);
-const label = ()=>{ const p = flip.getCurrentPageIndex()+1;
-  document.getElementById('pagenum').textContent = `${p} / ${N}`; };
+const label = ()=>{ document.getElementById('pagenum').textContent =
+  `${flip.getCurrentPageIndex()+1} / ${N}`; };
 flip.on('flip', label); setTimeout(label, 300);
 document.getElementById('prev').onclick = ()=>flip.flipPrev();
 document.getElementById('next').onclick = ()=>flip.flipNext();
 document.getElementById('fs').onclick = ()=>{
   document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); };
+
+/* ---------- Zoom lecture ---------- */
+const zv = document.getElementById('zv'), zview = document.getElementById('zv-view'),
+      zimg = document.getElementById('zv-img'), znum = document.getElementById('zv-num');
+let zp = 0, scale = 1, minScale = 1, tx = 0, ty = 0, natW = 1654, natH = 2339;
+function apply(){ zimg.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
+function clampPan(){
+  const vw = zview.clientWidth, vh = zview.clientHeight, w = natW*scale, h = natH*scale;
+  tx = w <= vw ? (vw-w)/2 : Math.min(0, Math.max(vw-w, tx));
+  ty = h <= vh ? (vh-h)/2 : Math.min(0, Math.max(vh-h, ty));
+}
+function fit(){
+  const vw = zview.clientWidth, vh = zview.clientHeight;
+  minScale = Math.min(vw/natW, vh/natH);
+  scale = minScale; tx = (vw-natW*scale)/2; ty = (vh-natH*scale)/2; apply();
+}
+function showPage(i){
+  zp = Math.max(0, Math.min(N-1, i));
+  znum.textContent = `${zp+1} / ${N}`;
+  zimg.onload = ()=>{ natW = zimg.naturalWidth; natH = zimg.naturalHeight; fit(); };
+  zimg.src = src(zp);
+}
+function openZoom(){ zv.classList.add('open'); showPage(flip.getCurrentPageIndex()); }
+function closeZoom(){ zv.classList.remove('open'); }
+function zoomAt(f, cx, cy){
+  const ns = Math.max(minScale, Math.min(minScale*5, scale*f));
+  tx = cx - (cx - tx) * (ns/scale); ty = cy - (cy - ty) * (ns/scale);
+  scale = ns; clampPan(); apply();
+}
+document.getElementById('zoom').onclick = openZoom;
+document.getElementById('book').addEventListener('dblclick', openZoom);
+document.getElementById('zv-close').onclick = closeZoom;
+document.getElementById('zv-prev').onclick = ()=>showPage(zp-1);
+document.getElementById('zv-next').onclick = ()=>showPage(zp+1);
+document.getElementById('zv-plus').onclick  = ()=>zoomAt(1.35, zview.clientWidth/2, zview.clientHeight/2);
+document.getElementById('zv-minus').onclick = ()=>zoomAt(1/1.35, zview.clientWidth/2, zview.clientHeight/2);
+document.getElementById('zv-fit').onclick = fit;
+zview.addEventListener('wheel', e=>{ e.preventDefault();
+  const r = zview.getBoundingClientRect();
+  zoomAt(e.deltaY < 0 ? 1.18 : 1/1.18, e.clientX - r.left, e.clientY - r.top);
+}, {passive:false});
+let drag = null;
+zview.addEventListener('pointerdown', e=>{ drag = {x:e.clientX-tx, y:e.clientY-ty};
+  zview.classList.add('dragging'); zview.setPointerCapture(e.pointerId); });
+zview.addEventListener('pointermove', e=>{ if(!drag) return;
+  tx = e.clientX-drag.x; ty = e.clientY-drag.y; clampPan(); apply(); });
+zview.addEventListener('pointerup', ()=>{ drag = null; zview.classList.remove('dragging'); });
+zimg.addEventListener('dblclick', e=>{ const r = zview.getBoundingClientRect();
+  zoomAt(scale <= minScale*1.05 ? 2.2 : 0.01, e.clientX - r.left, e.clientY - r.top); });
+window.addEventListener('resize', ()=>{ if (zv.classList.contains('open')) fit(); });
+
 document.addEventListener('keydown', e=>{
+  if (zv.classList.contains('open')){
+    if (e.key==='Escape') closeZoom();
+    if (e.key==='ArrowRight') showPage(zp+1);
+    if (e.key==='ArrowLeft') showPage(zp-1);
+    return;
+  }
   if (e.key==='ArrowRight'||e.key==='PageDown') flip.flipNext();
   if (e.key==='ArrowLeft'||e.key==='PageUp') flip.flipPrev();
 });
