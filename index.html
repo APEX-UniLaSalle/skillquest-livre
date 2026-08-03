@@ -65,8 +65,8 @@
 </div>
 
 <script>
-const N = 82, ratio = 210/297, PREFIX = '';
-const src = i => `${PREFIX}page-${String(i+1).padStart(2,'0')}.jpg`; // i = index 0-based
+const N = 102, ratio = 210/297, PREFIX = '';
+const src = i => `${PREFIX}page-${String(i+1).padStart(3,'0')}.jpg`; // i = index 0-based
 const pages = Array.from({length:N}, (_,i)=>src(i));
 function dims(){
   const availH = Math.max(320, window.innerHeight - 150);
