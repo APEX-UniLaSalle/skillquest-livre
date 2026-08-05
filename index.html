@@ -33,6 +33,29 @@
   #zv-img { position:absolute; top:0; left:0; transform-origin:0 0; user-select:none; -webkit-user-drag:none;
             box-shadow:0 8px 40px rgba(0,0,0,.6); }
   #zv-hint { text-align:center; font-size:.68rem; color:var(--or); opacity:.7; padding:6px; }
+  /* ---- Panneau sommaire / recherche ---- */
+  #panel { position:fixed; top:0; left:0; bottom:0; width:min(380px, 92vw); background:#241C28;
+           border-right:1px solid var(--or); z-index:60; display:none; flex-direction:column;
+           box-shadow:12px 0 40px rgba(0,0,0,.5); }
+  #panel.open { display:flex; }
+  #panel-bar { display:flex; gap:8px; align-items:center; padding:12px; border-bottom:1px solid rgba(223,163,92,.35); }
+  #panel-bar input { flex:1; background:rgba(244,237,220,.08); border:1px solid rgba(223,163,92,.5);
+    color:var(--parchemin); font:inherit; font-size:.85rem; padding:7px 10px; border-radius:5px; outline:none; }
+  #panel-bar input::placeholder { color:rgba(244,237,220,.45); }
+  #panel-bar button { background:transparent; border:1px solid var(--or); color:var(--parchemin);
+    font:inherit; font-size:.8rem; padding:6px 10px; border-radius:5px; cursor:pointer; }
+  #panel-list { flex:1; overflow-y:auto; padding:8px 0 20px; }
+  .toc-item { padding:7px 16px; cursor:pointer; font-size:.85rem; display:flex; gap:10px; }
+  .toc-item:hover { background:rgba(223,163,92,.14); }
+  .toc-item .pg { margin-left:auto; color:var(--or); font-size:.75rem; }
+  .toc-l1 { text-transform:uppercase; letter-spacing:.08em; color:var(--or); margin-top:8px; font-size:.78rem; }
+  .toc-l2 { padding-left:30px; }
+  .hit { padding:8px 16px; cursor:pointer; border-bottom:1px solid rgba(244,237,220,.06); }
+  .hit:hover { background:rgba(223,163,92,.14); }
+  .hit .pg { color:var(--or); font-size:.75rem; }
+  .hit .snip { font-size:.78rem; color:rgba(244,237,220,.75); margin-top:2px; }
+  .hit .snip b { color:var(--parchemin); font-weight:bold; background:rgba(223,163,92,.25); }
+  #panel-empty { padding:16px; font-size:.8rem; color:rgba(244,237,220,.5); }
 </style>
 </head>
 <body>
@@ -42,6 +65,7 @@
 </header>
 <div id="book-wrap"><div id="book"></div></div>
 <nav>
+  <button id="toc-btn">☰ Sommaire</button>
   <button id="prev">◀ Précédent</button>
   <span id="pagenum">…</span>
   <button id="next">Suivant ▶</button>
@@ -49,6 +73,14 @@
   <button id="fs">Plein écran</button>
   <a href="SkillQuest-2026-27.pdf" download>Télécharger le PDF</a>
 </nav>
+
+<div id="panel">
+  <div id="panel-bar">
+    <input id="q" type="search" placeholder="Rechercher dans le livre…" autocomplete="off">
+    <button id="panel-close">✕</button>
+  </div>
+  <div id="panel-list"></div>
+</div>
 
 <div id="zv">
   <div id="zv-bar">
@@ -64,8 +96,9 @@
   <div id="zv-hint">Molette ou boutons +/− pour zoomer · cliquer-glisser pour se déplacer · ←/→ pour changer de page · Échap pour fermer</div>
 </div>
 
+<script src="searchdata.js"></script>
 <script>
-const N = 102, ratio = 210/297, PREFIX = '';
+const N = 104, ratio = 210/297, PREFIX = '';
 const src = i => `${PREFIX}page-${String(i+1).padStart(3,'0')}.jpg`; // i = index 0-based
 const pages = Array.from({length:N}, (_,i)=>src(i));
 function dims(){
@@ -140,7 +173,46 @@ zimg.addEventListener('dblclick', e=>{ const r = zview.getBoundingClientRect();
   zoomAt(scale <= minScale*1.05 ? 2.2 : 0.01, e.clientX - r.left, e.clientY - r.top); });
 window.addEventListener('resize', ()=>{ if (zv.classList.contains('open')) fit(); });
 
+/* ---------- Sommaire et recherche ---------- */
+const panel = document.getElementById('panel'), plist = document.getElementById('panel-list'),
+      q = document.getElementById('q');
+const deacc = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function goTo(pdfPage){ panel.classList.remove('open'); flip.turnToPage(Math.max(0, Math.min(N-1, pdfPage-1))); label(); }
+function renderTOC(){
+  plist.innerHTML = '';
+  (SQDATA.toc||[]).forEach(([lvl,title,page])=>{
+    const div = document.createElement('div');
+    div.className = 'toc-item toc-l'+lvl;
+    div.innerHTML = `<span>${title}</span><span class="pg">${page}</span>`;
+    div.onclick = ()=>goTo(page);
+    plist.appendChild(div);
+  });
+}
+function renderSearch(term){
+  plist.innerHTML = '';
+  const t = deacc(term); let n = 0;
+  SQDATA.txt.forEach((txt,i)=>{
+    const k = txt.indexOf(t);
+    if (k < 0 || n >= 60) return;
+    n++;
+    const raw = SQDATA.raw[i];
+    const a = Math.max(0, k-55), b = Math.min(raw.length, k+t.length+55);
+    const snip = (a>0?'…':'') + raw.slice(a,k) + '<b>' + raw.slice(k,k+t.length) + '</b>' + raw.slice(k+t.length,b) + (b<raw.length?'…':'');
+    const div = document.createElement('div');
+    div.className = 'hit';
+    div.innerHTML = `<span class="pg">p. ${i+1}</span><div class="snip">${snip}</div>`;
+    div.onclick = ()=>goTo(i+1);
+    plist.appendChild(div);
+  });
+  if (!n) plist.innerHTML = '<div id="panel-empty">Aucun résultat.</div>';
+}
+q.addEventListener('input', ()=>{ q.value.trim().length >= 3 ? renderSearch(q.value.trim()) : renderTOC(); });
+document.getElementById('toc-btn').onclick = ()=>{ panel.classList.toggle('open');
+  if (panel.classList.contains('open')){ renderTOC(); q.value=''; q.focus(); } };
+document.getElementById('panel-close').onclick = ()=>panel.classList.remove('open');
+
 document.addEventListener('keydown', e=>{
+  if (panel.classList.contains('open')){ if (e.key==='Escape') panel.classList.remove('open'); return; }
   if (zv.classList.contains('open')){
     if (e.key==='Escape') closeZoom();
     if (e.key==='ArrowRight') showPage(zp+1);
