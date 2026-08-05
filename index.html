@@ -98,7 +98,7 @@
 
 <script src="searchdata.js"></script>
 <script>
-const N = 104, ratio = 210/297, PREFIX = '';
+const N = 103, ratio = 210/297, PREFIX = '';
 const src = i => `${PREFIX}page-${String(i+1).padStart(3,'0')}.jpg`; // i = index 0-based
 const pages = Array.from({length:N}, (_,i)=>src(i));
 function dims(){
